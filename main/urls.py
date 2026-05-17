@@ -7,4 +7,6 @@ urlpatterns = [
     path('movies/', MovieView.as_view()),
 
     path('subscriptions/', SubscriptionListCreateView.as_view()),
+
+    path('reviews/', ReviewListCreateView.as_view()),
 ]
