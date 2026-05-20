@@ -2,7 +2,6 @@ from django.contrib.auth.models import User
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 
-# Create your models here.
 
 class Actor(models.Model):
     class GenderChoices(models.TextChoices):
@@ -70,7 +69,7 @@ class Review(models.Model):
     )
     comment = models.TextField()
     rate = models.PositiveSmallIntegerField(
-        validators=[MinValueValidator(0) ,MaxValueValidator(5)]
+        validators=[MinValueValidator(0), MaxValueValidator(5)]
     )
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
