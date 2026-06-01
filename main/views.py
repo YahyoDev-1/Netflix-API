@@ -1,14 +1,14 @@
 from rest_framework.decorators import action
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.generics import ListCreateAPIView, RetrieveUpdateDestroyAPIView
 from rest_framework.generics import get_object_or_404
 from rest_framework.viewsets import ModelViewSet
-from django.http import Http404
 from rest_framework import permissions, status, response
 from rest_framework.response import Response
-from rest_framework.views import APIView
+from rest_framework import filters
 from .serializers import *
 from .models import *
-
+import django_filters
 
 # Create your views here.
 
@@ -60,6 +60,10 @@ from .models import *
 class ActorViewSet(ModelViewSet):
     queryset = Actor.objects.all()
     serializer_class = ActorSerializer
+    filter_backends = (filters.SearchFilter, filters.OrderingFilter,)
+    search_fields = ('name',)
+    ordering_fields = ('name', 'birth_date',)
+    filterset_fields = ('country', 'gender',)
 
 
 # class MovieView(APIView):
@@ -136,6 +140,7 @@ class MovieViewSet(ModelViewSet):
         # Javob qaytaramiz
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
+
 class SubscriptionListCreateView(ListCreateAPIView):
     queryset = Subscription.objects.all().order_by('-id')
     serializer_class = SubscriptionSerializer
@@ -146,11 +151,58 @@ class SubscriptionDetailView(RetrieveUpdateDestroyAPIView):
     serializer_class = SubscriptionSerializer
 
 
-class ReviewListCreateView(ListCreateAPIView):
+class ReviewViewSet(ModelViewSet):
+    permission_classes = (permissions.IsAuthenticated,)
     queryset = Review.objects.all()
     serializer_class = ReviewSerializer
 
+    def get_serializer_class(self):
+        if self.action in ["reviews"]:
+            return MovieSerializer
+        return ReviewSerializer
 
-class ReviewDetailView(RetrieveUpdateDestroyAPIView):
-    queryset = Review.objects.all()
-    serializer_class = ReviewSerializer
+    # Filmga tegishli sharhlarni ko'rish (GET) va yangi sharh yozish (POST)
+    @action(detail=True, methods=['get', 'post'], url_path='reviews')
+    def reviews(self, request, pk):
+        movie = get_object_or_404(Movie, pk=pk)
+
+        # GET so'rovi bo'lganda sharhlar ro'yxatini qaytaramiz
+        if request.method == 'GET':
+            reviews = movie.reviews.all()  # related_name='reviews'
+            serializer = ReviewSerializer(reviews, many=True)
+            return Response(serializer.data)
+
+        # POST so'rovi bo'lganda yangi sharh yaratamiz
+        elif request.method == 'POST':
+            serializer = ReviewSerializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+
+            # Sharhni saqlaymiz va unga ushbu filmni hamda so'rov yuborgan foydalanuvchini biriktiramiz
+            serializer.save(movie=movie, user=request.user)
+
+            # Yangi yaratilgan sharh ma'lumotlarini 201 status bilan qaytaramiz
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    def perform_destroy(self, instance):
+        # O'chirilmoqchi bo'lgan izoh egasi hozirgi foydalanuvchi bilan bir xilligini tekshiramiz
+        if instance.user != self.request.user:
+            raise PermissionDenied(
+                {"detail": "Siz faqat o'zingiz yozgan sharhlarni o'chira olasiz!"}
+            )
+
+        # Agar foydalanuvchiniki bo'lsa, o'chirib yuboramiz
+        instance.delete()
+
+    filter_backends = (filters.SearchFilter, filters.OrderingFilter,)
+    search_fields = ('user.username',)
+    ordering_fields = ('rate', 'created_at',)
+    filterset_fields = ('user.username', 'movie.title')
+
+
+class RateFilter(django_filters.FilterSet):
+    min_rate = django_filters.NumberFilter(field_name='rate', lookup_expr='gte')
+    max_rate = django_filters.NumberFilter(field_name='rate', lookup_expr='lte')
+
+    class Meta:
+        model = Review
+        fields = ['min_rate', 'max_rate']
