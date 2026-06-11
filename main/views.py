@@ -1,3 +1,4 @@
+from django.utils import translation
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.generics import ListCreateAPIView, RetrieveUpdateDestroyAPIView
@@ -64,6 +65,14 @@ class ActorViewSet(ModelViewSet):
     search_fields = ('name',)
     ordering_fields = ('name', 'birth_date',)
     filterset_fields = ('country', 'gender',)
+
+    def get_queryset(self):
+
+        lang = self.request.query_params.get('lang', ) or self.request.headers.get('Accept-Language', 'uz')
+
+        translation.activate(lang)
+
+        return super().get_queryset()
 
 
 # class MovieView(APIView):
